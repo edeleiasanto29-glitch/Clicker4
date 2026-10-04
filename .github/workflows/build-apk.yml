@@ -1,0 +1,70 @@
+name: Build APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Baixar repositorio
+        uses: actions/checkout@v4
+
+      - name: Extrair projeto
+        run: |
+          mkdir -p projeto
+
+          # Procurar automaticamente o ZIP da versão 1.5
+          if [ -f "JutsuAutoClicker-v1.5.zip" ]; then
+            ZIP="JutsuAutoClicker-v1.5.zip"
+          elif [ -f "JutsuAutoClicker-final.zip" ]; then
+            ZIP="JutsuAutoClicker-final.zip"
+          else
+            echo "ERRO: Nenhum ZIP do JutsuAutoClicker foi encontrado."
+            echo "Arquivos encontrados na raiz:"
+            ls -lah
+            exit 1
+          fi
+
+          echo "Usando: $ZIP"
+          unzip -q "$ZIP" -d projeto
+
+          ROOT=$(find projeto -name settings.gradle -o -name settings.gradle.kts | head -n 1)
+
+          if [ -z "$ROOT" ]; then
+            echo "ERRO: Nao encontrei settings.gradle dentro do ZIP."
+            echo "Estrutura encontrada:"
+            find projeto -maxdepth 4 -type f
+            exit 1
+          fi
+
+          ROOT=$(dirname "$ROOT")
+          echo "Projeto encontrado em: $ROOT"
+          echo "PROJECT_ROOT=$ROOT" >> "$GITHUB_ENV"
+
+      - name: Configurar Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Configurar Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+
+      - name: Compilar APK
+        run: |
+          cd "$PROJECT_ROOT"
+          gradle assembleDebug --stacktrace
+
+      - name: Salvar APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: JutsuAutoClicker-debug-apk
+          path: "${{ env.PROJECT_ROOT }}/app/build/outputs/apk/debug/app-debug.apk"
+          if-no-files-found: error
